@@ -1,0 +1,30 @@
+services:
+  app:
+    build: .
+    image: dendro-align:latest
+    environment:
+      APP_PORT: "8000"
+    ports:
+      # 宿主机端口通过 .env / 环境变量 HOST_PORT 配置, 默认 8000
+      - "${HOST_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3); assert json.load(r).get('status')=='ok'"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 8s
+    restart: unless-stopped
+
+  # 一次性校验服务 (up 时随 app 执行一次后退出; 推荐用 run 透传退出码):
+  #   docker compose run --rm verify
+  # 在 app 健康后依次执行: 代码测试、应用构建检查、两芯联合对齐 API 冒烟。
+  verify:
+    image: dendro-align:latest
+    build: .
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      APP_URL: "http://app:8000"
+    entrypoint: ["sh", "scripts/verify.sh"]
+    restart: "no"
